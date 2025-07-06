@@ -1,9 +1,7 @@
 // Chat.js
-import { attemptPlayAudio, toggleAudio, skipAudio } from './audio.js';
-import { generateEmoji } from './utils.js'; // Assuming generateEmoji is defined in utils.js
-
+// No imports, relying on global functions/React
 function Chat({ chatMessages, onSendChat, onCommand, onMinimize, isMinimized, username }) {
-  const [localMessages, setLocalMessages] = React.useState([]); 
+  const [localMessages, setLocalMessages] = React.useState([]);
   const [input, setInput] = React.useState('');
   const messagesEndRef = React.useRef(null);
 
@@ -21,7 +19,7 @@ function Chat({ chatMessages, onSendChat, onCommand, onMinimize, isMinimized, us
     attemptPlayAudio(); 
     
     const trimmedInput = input.trim();
-    const AI_EMOJI_COMMAND_PREFIX = '!emoji '; // This constant was defined locally
+    const AI_EMOJI_COMMAND_PREFIX = '!emoji '; 
 
     if (trimmedInput.startsWith('!') || trimmedInput.startsWith('/')) {
         setLocalMessages(prev => [...prev, { type: 'user', text: trimmedInput }]);
@@ -43,7 +41,7 @@ function Chat({ chatMessages, onSendChat, onCommand, onMinimize, isMinimized, us
             const expression = trimmedInput.substring(AI_EMOJI_COMMAND_PREFIX.length).trim();
             if (expression) {
                 try {
-                    const emoji = await generateEmoji(expression);
+                    const emoji = await generateEmoji(expression); // Global function
                     setLocalMessages(prev => [...prev, { type: 'bot', text: `Generated emoji for '${expression}': ${emoji}` }]);
                 } catch (error) {
                     console.error("Error generating emoji:", error);
@@ -106,5 +104,3 @@ function Chat({ chatMessages, onSendChat, onCommand, onMinimize, isMinimized, us
     </div>
   );
 }
-
-export default Chat;
