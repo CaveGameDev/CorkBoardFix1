@@ -1,5 +1,4 @@
 // Chat.js
-import React from 'react';
 import { attemptPlayAudio, toggleAudio, skipAudio } from './audio.js';
 import { generateEmoji } from './utils.js'; // Assuming generateEmoji is defined in utils.js
 
