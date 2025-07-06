@@ -1,7 +1,5 @@
 // main.js
-
-import ReactDOM from 'react-dom/client';
-import CorkBoard from './CorkBoard.js';
+// No imports, relying on global functions/React/ReactDOM
 
 // DB and user setup (global for the application)
 const username = localStorage.getItem('username')
@@ -9,4 +7,4 @@ const username = localStorage.getItem('username')
 localStorage.setItem('username', username);
 
 // Render the main React component
-ReactDOM.createRoot(document.getElementById('app')).render(<CorkBoard username={username} />);
+ReactDOM.createRoot(document.getElementById('app')).render(React.createElement(CorkBoard, { username: username }));
