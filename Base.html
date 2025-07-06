@@ -78,7 +78,12 @@
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const BOARD_TABLE_NAME = 'board_data';
-    const GLOBAL_BOARD_ROW_ID = 1;
+    // Define specific IDs for each data type
+    const NOTES_ROW_ID = 2;
+    const CHAT_ROW_ID = 3;
+    const ARCHIVES_ROW_ID = 4;
+    // You mentioned 5. ID 5 could be used for general settings, or other future data types.
+    // For now, we'll actively use 2, 3, and 4.
     const ADMIN_PASSWORD = 'hiwhyguy3911'; // The password to clear data
 
     let boardData = {
@@ -101,87 +106,107 @@
         setTimeout(() => msgElement.remove(), 5000);
     }
 
+    /**
+     * Fetches partitioned board data from Supabase and merges them locally.
+     */
     async function fetchBoardDataFromSupabase() {
+      let fetchedData = {
+          notes: [],
+          chatMessages: [],
+          archives: []
+      };
+
       try {
-        const { data, error } = await supabase
-          .from(BOARD_TABLE_NAME)
-          .select('data')
-          .eq('id', GLOBAL_BOARD_ROW_ID)
-          .single();
+          // Fetch notes from ID 2
+          const { data: notesData, error: notesError } = await supabase
+              .from(BOARD_TABLE_NAME)
+              .select('data')
+              .eq('id', NOTES_ROW_ID)
+              .single();
+          if (notesError && notesError.code !== 'PGRST116') { /* 'PGRST116' means no row found, which is fine for initial load */ throw notesError; }
+          if (notesData && Array.isArray(notesData.data)) fetchedData.notes = notesData.data;
 
-        if (error && error.code !== 'PGRST116') {
-            throw error;
-        }
+          // Fetch chatMessages from ID 3
+          const { data: chatData, error: chatError } = await supabase
+              .from(BOARD_TABLE_NAME)
+              .select('data')
+              .eq('id', CHAT_ROW_ID)
+              .single();
+          if (chatError && chatError.code !== 'PGRST116') throw chatError;
+          if (chatData && Array.isArray(chatData.data)) fetchedData.chatMessages = chatData.data;
 
-        if (data && data.data) {
-          // Merge incoming data from Supabase into our client-side 'boardData'.
-          // This "never erase" logic is crucial for ensuring client-side state is enriched.
-          for (const key in data.data) {
-              if (Object.hasOwnProperty.call(data.data, key) && data.data[key] !== undefined) {
-                  boardData[key] = data.data[key];
-              }
-          }
-          showStatus('Board data fetched from Supabase successfully.', 'success');
-        } else {
-            showStatus('No board data found in Supabase for ID ' + GLOBAL_BOARD_ROW_ID + '. Initializing with empty board.', 'warning');
-        }
+          // Fetch archives from ID 4
+          const { data: archivesData, error: archivesError } = await supabase
+              .from(BOARD_TABLE_NAME)
+              .select('data')
+              .eq('id', ARCHIVES_ROW_ID)
+              .single();
+          if (archivesError && archivesError.code !== 'PGRST116') throw archivesError;
+          if (archivesData && Array.isArray(archivesData.data)) fetchedData.archives = archivesData.data;
 
-        // Ensure primary properties of 'boardData' are always initialized as arrays.
-        if (!Array.isArray(boardData.notes)) boardData.notes = [];
-        if (!Array.isArray(boardData.chatMessages)) boardData.chatMessages = [];
-        if (!Array.isArray(boardData.archives)) boardData.archives = [];
+          // Update local boardData with fetched data (overwrite with fresh data from DB)
+          boardData = { ...fetchedData };
+          displayBoardData();
+          showStatus('Board data fetched from Supabase (partitioned) successfully.', 'success');
+          return boardData;
 
-        displayBoardData();
-        return boardData;
       } catch (error) {
-        console.error('Error fetching board data from Supabase:', error.message);
-        showStatus(`Error fetching board data: ${error.message}`, 'error');
-        return boardData;
+          console.error('Error fetching board data from Supabase (partitioned):', error.message);
+          showStatus(`Error fetching board data: ${error.message}`, 'error');
+          return boardData; // Return current boardData even on error
       }
     }
 
     /**
-     * Asynchronously sends updated board data to Supabase.
-     * It now intelligently merges arrays, appending new items, and overwrites other properties.
+     * Asynchronously sends updated board data to Supabase by partitioning it.
+     * It fetches existing data, merges new changes, and then upserts to specific IDs.
      * @param {Object} dataToMerge The partial data received from the parent frame to be merged.
      * Example: { notes: [{id: 123, content: "New Note"}] }
      */
     async function sendBoardDataToSupabase(dataToMerge) {
       try {
-        // Step 1: Fetch the current complete board data from Supabase.
-        // This is crucial to ensure that any changes made by other clients, or
-        // fields not included in 'dataToMerge', are preserved.
-        const { data: currentSupabaseRow, error: fetchError } = await supabase
-          .from(BOARD_TABLE_NAME)
-          .select('data')
-          .eq('id', GLOBAL_BOARD_ROW_ID)
-          .single();
+        // Step 1: Fetch the current complete board data from Supabase across partitions.
+        let existingSupabaseData = { notes: [], chatMessages: [], archives: [] };
 
-        let existingSupabaseData = {};
-        if (currentSupabaseRow && currentSupabaseRow.data) {
-            existingSupabaseData = currentSupabaseRow.data;
-        } else if (fetchError && fetchError.code === 'PGRST116') {
-            // No row found, start with default empty arrays to prevent errors
-            existingSupabaseData = { notes: [], chatMessages: [], archives: [] };
-        } else if (fetchError) {
-            throw fetchError; // If it's a real error other than "no rows found", throw it.
+        // Fetch notes
+        const { data: currentNotesRow, error: notesFetchError } = await supabase
+            .from(BOARD_TABLE_NAME)
+            .select('data')
+            .eq('id', NOTES_ROW_ID)
+            .single();
+        if (notesFetchError && notesFetchError.code !== 'PGRST116') throw notesFetchError;
+        if (currentNotesRow && Array.isArray(currentNotesRow.data)) {
+            existingSupabaseData.notes = currentNotesRow.data;
         }
 
-        // Ensure existing arrays are initialized if they don't exist
-        if (!Array.isArray(existingSupabaseData.notes)) existingSupabaseData.notes = [];
-        if (!Array.isArray(existingSupabaseData.chatMessages)) existingSupabaseData.chatMessages = [];
-        if (!Array.isArray(existingSupabaseData.archives)) existingSupabaseData.archives = [];
+        // Fetch chatMessages
+        const { data: currentChatRow, error: chatFetchError } = await supabase
+            .from(BOARD_TABLE_NAME)
+            .select('data')
+            .eq('id', CHAT_ROW_ID)
+            .single();
+        if (chatFetchError && chatFetchError.code !== 'PGRST116') throw chatFetchError;
+        if (currentChatRow && Array.isArray(currentChatRow.data)) {
+            existingSupabaseData.chatMessages = currentChatRow.data;
+        }
 
+        // Fetch archives
+        const { data: currentArchivesRow, error: archivesFetchError } = await supabase
+            .from(BOARD_TABLE_NAME)
+            .select('data')
+            .eq('id', ARCHIVES_ROW_ID)
+            .single();
+        if (archivesFetchError && archivesFetchError.code !== 'PGRST116') throw archivesFetchError;
+        if (currentArchivesRow && Array.isArray(currentArchivesRow.data)) {
+            existingSupabaseData.archives = currentArchivesRow.data;
+        }
 
-        // Step 2: Perform the intelligent merge logic.
-        // Create a new object for the merged data, starting with the existing DB data.
-        const mergedDataForSupabase = { ...existingSupabaseData };
+        // Step 2: Perform the intelligent merge logic using the fetched data and dataToMerge.
+        const mergedDataForSupabase = { ...existingSupabaseData }; // Start with fetched data
 
         for (const key in dataToMerge) {
             if (Object.hasOwnProperty.call(dataToMerge, key)) {
-                // Special handling for array properties: append unique new items
                 if (key === 'notes' && Array.isArray(dataToMerge.notes)) {
-                    // Create a Set of existing note IDs to prevent duplicates
                     const existingNoteIds = new Set(mergedDataForSupabase.notes.map(note => note.id));
                     dataToMerge.notes.forEach(newNote => {
                         if (!existingNoteIds.has(newNote.id)) {
@@ -189,8 +214,155 @@
                         }
                     });
                 } else if (key === 'chatMessages' && Array.isArray(dataToMerge.chatMessages)) {
-                    // Assuming chat messages might not have unique IDs, simple concatenation
                     mergedDataForSupabase.chatMessages.push(...dataToMerge.chatMessages);
                 } else if (key === 'archives' && Array.isArray(dataToMerge.archives)) {
-                    // Assuming archives might not have unique IDs, simple concatenation
-                    mergedDataForSupabase.
+                    mergedDataForSupabase.archives.push(...dataToMerge.archives);
+                } else {
+                    // For other non-array properties, simply overwrite/add with the new value
+                    if (dataToMerge[key] !== undefined) {
+                        mergedDataForSupabase[key] = dataToMerge[key];
+                    }
+                }
+            }
+        }
+
+        // Step 3: Send the fully merged data (by type) back to Supabase using 'upsert' to separate IDs.
+        // Only update the parts that were potentially modified or are part of the core data types.
+        const upsertPromises = [];
+
+        upsertPromises.push(supabase
+            .from(BOARD_TABLE_NAME)
+            .upsert({ id: NOTES_ROW_ID, data: mergedDataForSupabase.notes || [] }, { onConflict: 'id' }));
+
+        upsertPromises.push(supabase
+            .from(BOARD_TABLE_NAME)
+            .upsert({ id: CHAT_ROW_ID, data: mergedDataForSupabase.chatMessages || [] }, { onConflict: 'id' }));
+
+        upsertPromises.push(supabase
+            .from(BOARD_TABLE_NAME)
+            .upsert({ id: ARCHIVES_ROW_ID, data: mergedDataForSupabase.archives || [] }, { onConflict: 'id' }));
+        
+        // Wait for all upserts to complete
+        const results = await Promise.all(upsertPromises);
+        results.forEach(result => {
+            if (result.error) throw result.error;
+        });
+
+        console.log('Supabase update/insert successful. Saved partitioned data.');
+        showStatus('Board data saved to Supabase (partitioned) successfully.', 'success');
+
+        // After a successful save, refresh the client's display from the DB.
+        // This ensures the local UI reflects the exact state now stored in Supabase across partitions.
+        await fetchBoardDataFromSupabase();
+
+      } catch (error) {
+        console.error('Error saving board data to Supabase (partitioned):', error.message);
+        showStatus(`Error saving board data: ${error.message}`, 'error');
+      }
+    }
+
+    // New function to clear all board data
+    async function clearAllBoardData() {
+        const password = prompt("Enter password to clear all board data:");
+        if (password !== ADMIN_PASSWORD) {
+            showStatus("Incorrect password. Data not cleared.", "error");
+            return;
+        }
+
+        const confirmClear = confirm("Are you sure you want to clear ALL board data? This action cannot be undone.");
+        if (!confirmClear) {
+            showStatus("Clear data cancelled.", "info");
+            return;
+        }
+
+        try {
+            // Delete data from all relevant rows
+            const deletePromises = [
+                supabase.from(BOARD_TABLE_NAME).delete().eq('id', NOTES_ROW_ID),
+                supabase.from(BOARD_TABLE_NAME).delete().eq('id', CHAT_ROW_ID),
+                supabase.from(BOARD_TABLE_NAME).delete().eq('id', ARCHIVES_ROW_ID)
+            ];
+
+            const results = await Promise.all(deletePromises);
+            results.forEach(result => {
+                if (result.error && result.error.code !== 'PGRST116') { // Ignore 'no rows found' error
+                    throw result.error;
+                }
+            });
+            
+            // Reset local boardData to empty
+            boardData = { notes: [], chatMessages: [], archives: [] };
+            displayBoardData(); // Update the displayed data on the page
+            showStatus('All board data cleared successfully from Supabase.', 'success');
+        } catch (error) {
+            console.error('Error clearing board data from Supabase:', error.message);
+            showStatus(`Error clearing board data: ${error.message}`, 'error');
+        }
+    }
+
+    // --- Message Handling for Parent Frame Communication ---
+    window.addEventListener('message', async event => {
+      // IMPORTANT: Validate event.origin in production to prevent Cross-Site Scripting (XSS) attacks.
+      // Example: if (event.origin !== "https://your-main-app-domain.netlify.app") { return; }
+
+      try {
+        const msg = event.data;
+
+        // Handles messages requesting to SAVE board data
+        if (msg && msg.type === 'SAVE_BOARD' && msg.boardData) {
+          console.log('Received SAVE_BOARD from parent, initiating save to Supabase...');
+          // The parent should send the relevant parts of boardData to be merged (e.g., { notes: [...], chatMessages: [...] })
+          await sendBoardDataToSupabase(msg.boardData);
+        }
+        // Handles messages requesting to GET board data
+        else if (msg && msg.type === 'REQUEST_BOARD') {
+          console.log('Received REQUEST_BOARD from parent, fetching from Supabase and sending back...');
+          const currentSupabaseData = await fetchBoardDataFromSupabase();
+          event.source.postMessage({ type: 'BOARD_DATA', boardData: currentSupabaseData }, event.origin);
+        }
+      } catch (e) {
+        console.warn('DB frame error processing message:', e);
+        showStatus(`Internal DB frame communication error: ${e.message}`, 'error');
+      }
+    });
+
+    // --- Realtime Subscription for Automatic Updates from Other Clients ---
+    supabase
+      .channel('public:board_data')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: BOARD_TABLE_NAME,
+        // Listen for updates on the specific IDs where our data types are stored
+        filter: `id=in.(${NOTES_ROW_ID},${CHAT_ROW_ID},${ARCHIVES_ROW_ID})`
+      }, payload => {
+        console.log('Realtime update received:', payload.new);
+        if (payload.new && payload.new.data !== undefined && payload.new.id) {
+            const updatedId = payload.new.id;
+            const updatedData = payload.new.data;
+
+            // Update the specific part of boardData based on the ID that changed
+            if (updatedId === NOTES_ROW_ID) {
+                boardData.notes = Array.isArray(updatedData) ? updatedData : [];
+                showStatus('Realtime update: Notes received.', 'info');
+            } else if (updatedId === CHAT_ROW_ID) {
+                boardData.chatMessages = Array.isArray(updatedData) ? updatedData : [];
+                showStatus('Realtime update: Chat messages received.', 'info');
+            } else if (updatedId === ARCHIVES_ROW_ID) {
+                boardData.archives = Array.isArray(updatedData) ? updatedData : [];
+                showStatus('Realtime update: Archives received.', 'info');
+            }
+            displayBoardData(); // Refresh UI after specific data part is updated
+        }
+      })
+      .subscribe();
+    console.log(`Supabase Realtime subscription activated for ${BOARD_TABLE_NAME} (ids=${NOTES_ROW_ID},${CHAT_ROW_ID},${ARCHIVES_ROW_ID}).`);
+
+    // --- Event Listener for the new Clear Data button ---
+    document.getElementById('clear-data-button').addEventListener('click', clearAllBoardData);
+
+    // --- Initial Load ---
+    window.addEventListener('load', fetchBoardDataFromSupabase);
+  </script>
+</body>
+</html>
