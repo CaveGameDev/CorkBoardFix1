@@ -26,11 +26,17 @@
     .status-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <h2>Stored Board Data (Supabase Backend)</h2>
+  <div id="status-messages"></div>
+  <pre id="board-data">Loading…</pre>
+
   <script>
     // --- SUPABASE CONFIGURATION ---
     // These values are directly from your Supabase project
     const SUPABASE_URL = 'https://gtmpsjiuqyqjonlzjuhz.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_lBme1W769_h523sdzlpGuw_Aqm4qcdv';
+    const SUPABASE_ANON_KEY = 'sb_secret_pLEpe2VqKIkWlJDRXsZUvg_aE7Ctpi1';
 
     // Initialize the Supabase client
     const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -63,8 +69,8 @@
         const statusDiv = document.getElementById('status-messages');
         const msgElement = document.createElement('div');
         msgElement.className = `status-message status-${type}`;
-        msgElement.textContent = message;
         statusDiv.appendChild(msgElement);
+        msgElement.textContent = message; // Set textContent after appending for better flow
         setTimeout(() => msgElement.remove(), 5000); // Remove after 5 seconds
     }
 
@@ -89,8 +95,6 @@
 
         if (data && data.data) { // Check if data and its 'data' property (the JSONB content) exist
           // Merge incoming data from Supabase with current client-side boardData.
-          // This "never erase" logic is important client-side if Supabase somehow
-          // returns partial data, though for a single JSONB column, it should return the full object.
           for (const key in data.data) {
               if (Object.hasOwnProperty.call(data.data, key) && data.data[key] !== undefined) {
                   boardData[key] = data.data[key];
@@ -218,12 +222,8 @@
 
     // --- Initial Load ---
     // When this HTML page loads in the iframe, immediately fetch the latest data from Supabase
+    // This event listener will fire *after* the script block has executed.
     window.addEventListener('load', fetchBoardDataFromSupabase);
   </script>
-</head>
-<body>
-  <h2>Stored Board Data (Supabase Backend)</h2>
-  <div id="status-messages"></div>
-  <pre id="board-data">Loading…</pre>
 </body>
 </html>
