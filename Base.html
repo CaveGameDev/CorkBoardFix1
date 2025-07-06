@@ -4,27 +4,49 @@
   <meta charset="UTF-8">
   <title>Board Database (Supabase Backend)</title>
   <style>
-    body { margin:0; padding:20px; font-family: monospace; background:#f5f5f5; }
-    h2 { margin-top:0; }
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: monospace;
+      background: #f5f5f5;
+      color: #333;
+      line-height: 1.6;
+    }
+    h2 {
+      margin-top: 0;
+      color: #2c3e50;
+      font-size: 1.5em;
+    }
     #board-data {
-      white-space: pre-wrap;
-      word-wrap: break-word;
+      white-space: pre-wrap; /* Preserve whitespace and line breaks */
+      word-wrap: break-word; /* Break long words */
       background: #fff;
-      padding:10px;
-      border:1px solid #ccc;
-      min-height: 100px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      min-height: 120px;
+      overflow-x: auto; /* Enable horizontal scrolling for wide data */
+      font-size: 0.85em;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .status-messages {
+      margin-top: 15px;
+      min-height: 25px; /* Reserve space to prevent layout shift */
     }
     .status-message {
-      margin-top: 10px;
-      padding: 5px;
-      border-radius: 3px;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 4px;
       font-size: 0.9em;
+      font-weight: bold;
+      transition: opacity 0.3s ease-out;
     }
     .status-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
     .status-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     .status-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
     .status-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
   </style>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 </head>
 <body>
@@ -34,19 +56,20 @@
 
   <script>
     // --- SUPABASE CONFIGURATION ---
-    // These values are directly from your Supabase project
+    // These values are directly from your Supabase project dashboard -> API Settings
     const SUPABASE_URL = 'https://gtmpsjiuqyqjonlzjuhz.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_lBme1W769_h523sdzlpGuw_Aqm4qcdv';
 
     // Initialize the Supabase client
-    // This part will now correctly execute AFTER the Supabase SDK is loaded, thanks to 'defer'
+    // This line will now correctly execute because 'Supabase' is defined by the loaded SDK.
     const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Database table and row configuration
-    const BOARD_TABLE_NAME = 'board_data'; // The name of your table in Supabase
+    const BOARD_TABLE_NAME = 'board_data'; // The exact name of your table in Supabase
     const GLOBAL_BOARD_ROW_ID = 1;       // The ID of the single row storing the global board data
 
-    // Initial client-side state of the board data
+    // Initial client-side state of the board data.
+    // This will be populated from Supabase on load.
     let boardData = {
       notes: [],
       chatMessages: [],
@@ -54,7 +77,7 @@
     };
 
     /**
-     * Displays the current boardData in the pre-formatted tag.
+     * Updates the content of the pre-formatted tag to display the current boardData.
      */
     function displayBoardData() {
       const pre = document.getElementById('board-data');
@@ -62,40 +85,43 @@
     }
 
     /**
-     * Displays a temporary status message to the user.
-     * @param {string} message The message to display.
-     * @param {string} type 'success', 'error', 'info', or 'warning'.
+     * Displays a temporary status message to the user in the UI.
+     * @param {string} message The text message to display.
+     * @param {string} type The type of message ('success', 'error', 'info', 'warning') for styling.
      */
     function showStatus(message, type) {
         const statusDiv = document.getElementById('status-messages');
         const msgElement = document.createElement('div');
         msgElement.className = `status-message status-${type}`;
+        msgElement.textContent = message;
         statusDiv.appendChild(msgElement);
-        msgElement.textContent = message; // Set textContent after appending for better flow
-        setTimeout(() => msgElement.remove(), 5000); // Remove after 5 seconds
+        // Automatically remove the message after 5 seconds for a cleaner UI
+        setTimeout(() => msgElement.remove(), 5000);
     }
 
     /**
-     * Fetches the latest board data from Supabase.
-     * Merges it with the current client-side boardData to maintain persistence
-     * for fields not explicitly returned (though Supabase should return full JSONB).
-     * @returns {Object} The updated boardData object.
+     * Asynchronously fetches the latest board data from Supabase.
+     * It merges the fetched data with the current client-side 'boardData' to prevent accidental loss
+     * of properties, especially if the database structure evolves.
+     * @returns {Object} The updated 'boardData' object.
      */
     async function fetchBoardDataFromSupabase() {
       try {
         const { data, error } = await supabase
           .from(BOARD_TABLE_NAME)
-          .select('data') // Select only the 'data' column which contains our JSONB object
-          .eq('id', GLOBAL_BOARD_ROW_ID)
-          .single(); // Expecting a single row for our global board
+          .select('data') // Selects only the 'data' JSONB column
+          .eq('id', GLOBAL_BOARD_ROW_ID) // Targets the specific global board row
+          .single(); // Expects exactly one row
 
-        // Supabase returns PGRST116 when no rows are found, which is not a critical error for us initially
+        // Supabase returns a specific error code ('PGRST116') if no rows are found.
+        // This is not a fatal error on initial load; it just means the board is empty.
         if (error && error.code !== 'PGRST116') {
-            throw error; // Throw other types of errors
+            throw error; // Re-throw other types of errors
         }
 
-        if (data && data.data) { // Check if data and its 'data' property (the JSONB content) exist
-          // Merge incoming data from Supabase with current client-side boardData.
+        if (data && data.data) { // If a row was found and it has content in its 'data' column
+          // Merge incoming data from Supabase into our client-side 'boardData'.
+          // This "never erase" logic is crucial for ensuring client-side state is enriched.
           for (const key in data.data) {
               if (Object.hasOwnProperty.call(data.data, key) && data.data[key] !== undefined) {
                   boardData[key] = data.data[key];
@@ -103,34 +129,38 @@
           }
           showStatus('Board data fetched from Supabase successfully.', 'success');
         } else {
-            // If no data found for the ID, it means the row might not exist yet.
-            // boardData remains its default empty state, and we'll insert on first save.
-            showStatus('No board data found in Supabase for ID ' + GLOBAL_BOARD_ROW_ID + '. Starting with default empty data.', 'warning');
+            // If the row doesn't exist yet, or 'data' column is null/empty.
+            // 'boardData' remains its default empty state, and will be created on the first save.
+            showStatus('No board data found in Supabase for ID ' + GLOBAL_BOARD_ROW_ID + '. Initializing with empty board.', 'warning');
         }
 
-        // Ensure primary properties of boardData are always arrays, even if empty or initially missing from DB
+        // Ensure primary properties of 'boardData' are always initialized as arrays.
+        // This prevents 'undefined.push is not a function' errors if the DB was empty.
         if (!Array.isArray(boardData.notes)) boardData.notes = [];
         if (!Array.isArray(boardData.chatMessages)) boardData.chatMessages = [];
         if (!Array.isArray(boardData.archives)) boardData.archives = [];
 
-        displayBoardData();
-        return boardData; // Return the current merged client-side data
+        displayBoardData(); // Update the UI to show the fetched/initial data
+        return boardData; // Return the current client-side 'boardData'
       } catch (error) {
         console.error('Error fetching board data from Supabase:', error.message);
         showStatus(`Error fetching board data: ${error.message}`, 'error');
-        return boardData; // Return current client-side data on error
+        return boardData; // Return current 'boardData' on error to keep some state
       }
     }
 
     /**
-     * Updates the board data in Supabase.
-     * It fetches the current data, merges the new incoming data, and then upserts it.
-     * This ensures the "never erase" and "merge" logic is applied server-side (via JSONB update).
-     * @param {Object} dataToMerge The partial data received from the sender to merge into the board.
+     * Asynchronously sends updated board data to Supabase.
+     * It first fetches the *current* state from Supabase, merges the 'dataToMerge' into it,
+     * and then performs an 'upsert'. 'upsert' means it will insert the row if 'id=1' doesn't exist,
+     * or update it if it does. This maintains the "never erase" logic server-side.
+     * @param {Object} dataToMerge The partial data received from the parent frame to be merged.
      */
     async function sendBoardDataToSupabase(dataToMerge) {
       try {
-        // Step 1: Fetch the current complete board data from Supabase
+        // Step 1: Fetch the current complete board data from Supabase.
+        // This is crucial to ensure that any changes made by other clients, or
+        // fields not included in 'dataToMerge', are preserved.
         const { data: currentSupabaseRow, error: fetchError } = await supabase
           .from(BOARD_TABLE_NAME)
           .select('data')
@@ -140,22 +170,22 @@
         let existingSupabaseData = {};
         if (currentSupabaseRow && currentSupabaseRow.data) {
             existingSupabaseData = currentSupabaseRow.data;
-        } else if (fetchError && fetchError.code !== 'PGRST116') { // Ignore "no rows found" error for initial state
-            throw fetchError; // Re-throw other fetch errors
+        } else if (fetchError && fetchError.code !== 'PGRST116') {
+            throw fetchError; // If it's a real error other than "no rows found", throw it.
         }
 
-        // Step 2: Perform the merge client-side
-        // Create a new object for the merged data, starting with existing data
+        // Step 2: Perform the merge logic client-side.
+        // Create a new object for the merged data, starting with the existing DB data.
         const mergedDataForSupabase = { ...existingSupabaseData };
-        // Then, overwrite/add properties from the incoming dataToMerge
+        // Then, overwrite/add properties from the incoming 'dataToMerge'.
         for (const key in dataToMerge) {
             if (Object.hasOwnProperty.call(dataToMerge, key) && dataToMerge[key] !== undefined) {
                 mergedDataForSupabase[key] = dataToMerge[key];
             }
         }
 
-        // Step 3: Send the fully merged data back to Supabase using upsert
-        // upsert will insert if the row (id=1) doesn't exist, or update if it does.
+        // Step 3: Send the fully merged data back to Supabase using 'upsert'.
+        // 'onConflict: "id"' tells Supabase to update if 'id=1' exists, otherwise insert it.
         const { data, error } = await supabase
           .from(BOARD_TABLE_NAME)
           .upsert({ id: GLOBAL_BOARD_ROW_ID, data: mergedDataForSupabase }, { onConflict: 'id' });
@@ -165,7 +195,8 @@
         console.log('Supabase update/insert successful:', data);
         showStatus('Board data saved to Supabase successfully.', 'success');
 
-        // Step 4: After a successful save, refresh the client's display to ensure consistency
+        // Step 4: After a successful save, refresh the client's display.
+        // This ensures the local UI reflects the exact state now stored in Supabase.
         await fetchBoardDataFromSupabase();
       } catch (error) {
         console.error('Error saving board data to Supabase:', error.message);
@@ -173,14 +204,14 @@
       }
     }
 
-    // --- Message Handling (for communication with parent frame) ---
-    // This listener allows other HTML pages (e.g., your main index.html) to interact with this database frame.
+    // --- Message Handling for Parent Frame Communication ---
+    // This allows your main application HTML to send messages to, and receive messages from, this iframe.
     window.addEventListener('message', async event => {
-      // IMPORTANT: In a production environment, always validate event.origin to prevent security issues.
-      // Example: if (event.origin !== "https://your-main-app-domain.netlify.app") return;
+      // IMPORTANT: Validate event.origin in production to prevent Cross-Site Scripting (XSS) attacks.
+      // Example: if (event.origin !== "https://your-main-app-domain.netlify.app") { return; }
 
       try {
-        const msg = event.data;
+        const msg = event.data; // The data sent from the parent frame
 
         // Handles messages requesting to SAVE board data
         if (msg && msg.type === 'SAVE_BOARD' && msg.boardData) {
@@ -190,40 +221,47 @@
         // Handles messages requesting to GET board data
         else if (msg && msg.type === 'REQUEST_BOARD') {
           console.log('Received REQUEST_BOARD from parent, fetching from Supabase and sending back...');
-          const currentSupabaseData = await fetchBoardDataFromSupabase(); // Get the very latest from Supabase
-          // Send the data fetched from Supabase back to the frame that requested it
+          const currentSupabaseData = await fetchBoardDataFromSupabase(); // Get the very latest data from Supabase
+          // Send the fetched data back to the frame that requested it
           event.source.postMessage({ type: 'BOARD_DATA', boardData: currentSupabaseData }, event.origin);
         }
       } catch (e) {
         console.warn('DB frame error processing message:', e);
-        showStatus(`Internal DB frame error: ${e.message}`, 'error');
+        showStatus(`Internal DB frame communication error: ${e.message}`, 'error');
       }
     });
 
-    // --- Realtime Subscription for automatic updates from other clients ---
-    // This makes the board truly "realtime" across all connected users.
+    // --- Realtime Subscription for Automatic Updates from Other Clients ---
+    // This feature makes the board truly "realtime" by listening for database changes
+    // and automatically updating the UI across all connected users.
     supabase
-      .channel('public:board_data') // Listen to changes in the 'board_data' table in the 'public' schema
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: BOARD_TABLE_NAME, filter: `id=eq.${GLOBAL_BOARD_ROW_ID}` }, payload => {
-        // This callback fires when the specific row (ID=1) is updated in Supabase by any client.
+      .channel('public:board_data') // Specifies the channel to subscribe to (table name 'board_data' in 'public' schema)
+      .on('postgres_changes', {
+        event: 'UPDATE',         // Listen only for UPDATE events
+        schema: 'public',        // In the 'public' schema
+        table: BOARD_TABLE_NAME, // For our 'board_data' table
+        filter: `id=eq.${GLOBAL_BOARD_ROW_ID}` // And specifically for the global board row (id=1)
+      }, payload => {
+        // This callback function executes whenever the specified row in Supabase is updated.
         console.log('Realtime update received:', payload.new.data);
         if (payload.new.data) {
-          // Merge the new data received from the realtime update into the client's current boardData
+          // Merge the new data received from the realtime update into the client's current 'boardData'.
+          // This keeps the local state synchronized with the latest changes from other clients.
           for (const key in payload.new.data) {
             if (Object.hasOwnProperty.call(payload.new.data, key) && payload.new.data[key] !== undefined) {
               boardData[key] = payload.new.data[key];
             }
           }
-          displayBoardData(); // Update the UI immediately
+          displayBoardData(); // Immediately update the UI to reflect the changes
           showStatus('Realtime update received and applied.', 'info');
         }
       })
-      .subscribe(); // Activate the subscription
-    console.log('Supabase Realtime subscription activated.');
+      .subscribe(); // Activates the real-time subscription
+    console.log('Supabase Realtime subscription activated for ' + BOARD_TABLE_NAME + ' (id=' + GLOBAL_BOARD_ROW_ID + ').');
 
     // --- Initial Load ---
-    // When this HTML page loads in the iframe, immediately fetch the latest data from Supabase
-    // This event listener will fire *after* the script block has executed.
+    // This event listener ensures that the initial data fetch happens only after the entire
+    // HTML document has been loaded, including external resources like images, CSS, and other scripts.
     window.addEventListener('load', fetchBoardDataFromSupabase);
   </script>
 </body>
