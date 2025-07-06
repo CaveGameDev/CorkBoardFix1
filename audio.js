@@ -1,110 +1,73 @@
-// Chat.js
-import { attemptPlayAudio, toggleAudio, skipAudio } from './audio.js';
-import { generateEmoji } from './utils.js'; // Assuming generateEmoji is defined in utils.js
+// audio.js
 
-function Chat({ chatMessages, onSendChat, onCommand, onMinimize, isMinimized, username }) {
-  const [localMessages, setLocalMessages] = React.useState([]); 
-  const [input, setInput] = React.useState('');
-  const messagesEndRef = React.useRef(null);
+const audioList = [
+  'Elevator Music.mp3',
+  'The Great Strategy (2005) Roblox Theme 2006.mp3',
+  'Sonic The Hedgehog OST - Green Hill Zone.mp3',
+  'ROBLOX runaway.mp3',
+  'Mii Editor - Mii Maker (Wii U) Music [ ezmp3.cc ].mp3',
+  'omfg low quality.mp3',
+  'Raise_A_Floppa_Soundtrack_[_YouConvert.net_].mp3',
+  'Special Stage - Sonic the Hedgehog 3 [OST] - DeoxysPrime.mp3',
+  'Super Mario 64 - Main Theme Music - Bob-Omb Battlefield [TubeRipper.com].mp3',
+  'Coconut Mall - Mario Kart Wii OST.mp3',
+  'Burger King Whopper Whopper Whopper Commercial But Its Low Quality.mp3',
+  'c418-sweden-minecraft-volume-alpha.mp3',
+  'Super Mario 64 Music - File Select EXTENDED.mp3',
+  '02. Wasted Years.mp3',
+].map(src => encodeURI(src));
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+let currentTrackIndex = 0;
+const audio = new Audio();
+audio.src = audioList[0];
+audio.loop = false;
+let isMusicUserPaused = false;
 
-  React.useEffect(() => {
-    scrollToBottom();
-  }, [localMessages, chatMessages]);
-
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    
-    attemptPlayAudio(); 
-    
-    const trimmedInput = input.trim();
-    const AI_EMOJI_COMMAND_PREFIX = '!emoji '; // This constant was defined locally
-
-    if (trimmedInput.startsWith('!') || trimmedInput.startsWith('/')) {
-        setLocalMessages(prev => [...prev, { type: 'user', text: trimmedInput }]);
-        const command = trimmedInput.toLowerCase();
-        
-        if (command === '!pause') {
-            onCommand('toggleMusic');
-            setLocalMessages(prev => [...prev, { type: 'bot', text: 'Toggling music...' }]);
-        } else if (command === '!skip') {
-            onCommand('skipMusic');
-            setLocalMessages(prev => [...prev, { type: 'bot', text: 'Skipping song...' }]);
-        } else if (command === '/archive board') {
-            onCommand('archive');
-            setLocalMessages(prev => [...prev, { type: 'bot', text: 'Archiving current board state...' }]);
-        } else if (command === '/archive view') {
-            onCommand('viewArchives');
-            setLocalMessages(prev => [...prev, { type: 'bot', text: 'Opening archives...' }]);
-        } else if (trimmedInput.startsWith(AI_EMOJI_COMMAND_PREFIX)) {
-            const expression = trimmedInput.substring(AI_EMOJI_COMMAND_PREFIX.length).trim();
-            if (expression) {
-                try {
-                    const emoji = await generateEmoji(expression);
-                    setLocalMessages(prev => [...prev, { type: 'bot', text: `Generated emoji for '${expression}': ${emoji}` }]);
-                } catch (error) {
-                    console.error("Error generating emoji:", error);
-                    setLocalMessages(prev => [...prev, { type: 'bot', text: `Failed to generate emoji for '${expression}'.` }]);
-                }
-            } else {
-                setLocalMessages(prev => [...prev, { type: 'bot', text: 'Please provide an expression after !emoji' }]);
-            }
-        }
-        else {
-            setLocalMessages(prev => [...prev, { type: 'bot', text: 'Command not recognized. Try !pause, !skip, /archive board, /archive view, or !emoji <expression>' }]);
-        }
-    } else {
-        onSendChat(trimmedInput);
-    }
-    
-    setInput('');
-  };
-
-  const allMessages = [
-    ...localMessages.map(msg => ({ ...msg, type: msg.type === 'user' ? 'self' : msg.type })), 
-    ...chatMessages.map(msg => ({
-        ...msg,
-        type: msg.username === username ? 'self' : 'peer' 
-    }))
-  ].sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0)); 
-
-  if (isMinimized) {
-    return null; 
+audio.addEventListener('ended', () => {
+  currentTrackIndex = (currentTrackIndex + 1) % audioList.length;
+  audio.src = audioList[currentTrackIndex];
+  if (!isMusicUserPaused) {
+    audio.play().catch(err => console.warn("Audio play failed on next track:", err));
   }
+});
 
-  return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <span>Chat</span>
-        <button className="chat-minimize-button" onClick={onMinimize}>&mdash;</button>
-      </div>
-      <div className="chat-messages">
-        {allMessages.map((msg, i) => (
-          <div key={msg.id || `local-${i}`} className={`chat-message ${msg.type}`}>
-            {(msg.type === 'peer' || msg.type === 'self') && <div className="username">{msg.username}</div>}
-            <div className="text">{msg.text}</div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} /> 
-      </div>
-      <div className="chat-input">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === 'Enter') {
-              handleSend();
-            }
-          }}
-          placeholder="Type a message or command..."
-        />
-        <button onClick={handleSend}>Send</button>
-      </div>
-    </div>
-  );
-}
+const fluorescentBuzzAudio = new Audio(encodeURI('Fluorescent light Buzz.mp3'));
+fluorescentBuzzAudio.loop = true;
+fluorescentBuzzAudio.volume = 0.5;
 
-export default Chat;
+const toggleAudio = () => {
+  if (audio.paused) {
+    audio.play().catch(err => console.warn("Audio play failed on toggle:", err));
+    isMusicUserPaused = false;
+  } else {
+    audio.pause();
+    isMusicUserPaused = true;
+  }
+};
+
+const skipAudio = () => {
+  if (audioList.length > 0) {
+    currentTrackIndex = (currentTrackIndex + 1) % audioList.length;
+    audio.src = audioList[currentTrackIndex];
+    audio.play().catch(err => console.warn("Audio play failed on skip:", err));
+    isMusicUserPaused = false;
+  }
+};
+
+const attemptPlayAudio = () => {
+  console.log("Attempting to play audio due to user interaction.");
+  if (!isMusicUserPaused && audio.paused && fluorescentBuzzAudio.paused) {
+    audio.play().catch(err => console.warn("Audio play failed:", err));
+  } else if (fluorescentBuzzAudio.paused) {
+    // No explicit action needed if main audio is playing or user paused.
+    // The point of this function is to kickstart audio if user interaction allows it.
+  }
+};
+
+// Make functions globally accessible if needed, e.g., by attaching to window
+window.toggleAudio = toggleAudio;
+window.skipAudio = skipAudio;
+window.attemptPlayAudio = attemptPlayAudio;
+window.isMusicUserPaused = isMusicUserPaused; // Expose the state if needed
+window.audio = audio; // Expose audio objects for direct manipulation if necessary
+window.fluorescentBuzzAudio = fluorescentBuzzAudio;
