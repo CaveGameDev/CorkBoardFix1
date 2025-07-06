@@ -18,20 +18,20 @@
       font-size: 1.5em;
     }
     #board-data {
-      white-space: pre-wrap; /* Preserve whitespace and line breaks */
-      word-wrap: break-word; /* Break long words */
+      white-space: pre-wrap;
+      word-wrap: break-word;
       background: #fff;
       padding: 15px;
       border: 1px solid #ddd;
       border-radius: 5px;
       min-height: 120px;
-      overflow-x: auto; /* Enable horizontal scrolling for wide data */
+      overflow-x: auto;
       font-size: 0.85em;
       box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     .status-messages {
       margin-top: 15px;
-      min-height: 25px; /* Reserve space to prevent layout shift */
+      min-height: 25px;
     }
     .status-message {
       margin-bottom: 8px;
@@ -46,51 +46,34 @@
     .status-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
     .status-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
   </style>
-
-  </head>
+</head>
 <body>
   <h2>Stored Board Data (Supabase Backend)</h2>
   <div id="status-messages"></div>
   <pre id="board-data">Loading…</pre>
 
   <script type="module">
-    // Import createClient directly from the CDN URL for modules.
-    // This is the equivalent of 'npm install @supabase/supabase-js' for browser modules.
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-    // --- SUPABASE CONFIGURATION ---
-    // These values are directly from your Supabase project dashboard -> API Settings
-    // REMEMBER: process.env does NOT work in a plain browser environment.
     const supabaseUrl = 'https://gtmpsjiuqyqjonlzjuhz.supabase.co';
-    const supabaseAnonKey = 'sb_publishable_lBme1W769_h523sdzlpGuw_Aqm4qcdv'; // Directly embed your public key
+    const supabaseAnonKey = 'sb_publishable_lBme1W769_h523sdzlpGuw_Aqm4qcdv';
 
-    // Initialize the Supabase client using the imported createClient function
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    // Database table and row configuration
-    const BOARD_TABLE_NAME = 'board_data'; // The exact name of your table in Supabase
-    const GLOBAL_BOARD_ROW_ID = 1;       // The ID of the single row storing the global board data
+    const BOARD_TABLE_NAME = 'board_data';
+    const GLOBAL_BOARD_ROW_ID = 1;
 
-    // Initial client-side state of the board data.
     let boardData = {
       notes: [],
       chatMessages: [],
       archives: []
     };
 
-    /**
-     * Updates the content of the pre-formatted tag to display the current boardData.
-     */
     function displayBoardData() {
       const pre = document.getElementById('board-data');
       pre.textContent = JSON.stringify(boardData, null, 2);
     }
 
-    /**
-     * Displays a temporary status message to the user in the UI.
-     * @param {string} message The text message to display.
-     * @param {string} type The type of message ('success', 'error', 'info', 'warning') for styling.
-     */
     function showStatus(message, type) {
         const statusDiv = document.getElementById('status-messages');
         const msgElement = document.createElement('div');
@@ -100,11 +83,6 @@
         setTimeout(() => msgElement.remove(), 5000);
     }
 
-    /**
-     * Asynchronously fetches the latest board data from Supabase.
-     * It merges the fetched data with the current client-side 'boardData'.
-     * @returns {Object} The updated 'boardData' object.
-     */
     async function fetchBoardDataFromSupabase() {
       try {
         const { data, error } = await supabase
@@ -118,6 +96,8 @@
         }
 
         if (data && data.data) {
+          // Merge incoming data from Supabase into our client-side 'boardData'.
+          // This "never erase" logic is crucial for ensuring client-side state is enriched.
           for (const key in data.data) {
               if (Object.hasOwnProperty.call(data.data, key) && data.data[key] !== undefined) {
                   boardData[key] = data.data[key];
@@ -128,6 +108,7 @@
             showStatus('No board data found in Supabase for ID ' + GLOBAL_BOARD_ROW_ID + '. Initializing with empty board.', 'warning');
         }
 
+        // Ensure primary properties of 'boardData' are always initialized as arrays.
         if (!Array.isArray(boardData.notes)) boardData.notes = [];
         if (!Array.isArray(boardData.chatMessages)) boardData.chatMessages = [];
         if (!Array.isArray(boardData.archives)) boardData.archives = [];
@@ -143,12 +124,15 @@
 
     /**
      * Asynchronously sends updated board data to Supabase.
-     * It first fetches the *current* state from Supabase, merges the 'dataToMerge' into it,
-     * and then performs an 'upsert'.
+     * It now intelligently merges arrays, appending new items, and overwrites other properties.
      * @param {Object} dataToMerge The partial data received from the parent frame to be merged.
+     * Example: { notes: [{id: 123, content: "New Note"}] }
      */
     async function sendBoardDataToSupabase(dataToMerge) {
       try {
+        // Step 1: Fetch the current complete board data from Supabase.
+        // This is crucial to ensure that any changes made by other clients, or
+        // fields not included in 'dataToMerge', are preserved.
         const { data: currentSupabaseRow, error: fetchError } = await supabase
           .from(BOARD_TABLE_NAME)
           .select('data')
@@ -158,27 +142,68 @@
         let existingSupabaseData = {};
         if (currentSupabaseRow && currentSupabaseRow.data) {
             existingSupabaseData = currentSupabaseRow.data;
-        } else if (fetchError && fetchError.code !== 'PGRST116') {
-            throw fetchError;
+        } else if (fetchError && fetchError.code === 'PGRST116') {
+            // No row found, start with default empty arrays to prevent errors
+            existingSupabaseData = { notes: [], chatMessages: [], archives: [] };
+        } else if (fetchError) {
+            throw fetchError; // If it's a real error other than "no rows found", throw it.
         }
 
+        // Ensure existing arrays are initialized if they don't exist
+        if (!Array.isArray(existingSupabaseData.notes)) existingSupabaseData.notes = [];
+        if (!Array.isArray(existingSupabaseData.chatMessages)) existingSupabaseData.chatMessages = [];
+        if (!Array.isArray(existingSupabaseData.archives)) existingSupabaseData.archives = [];
+
+
+        // Step 2: Perform the intelligent merge logic.
+        // Create a new object for the merged data, starting with the existing DB data.
         const mergedDataForSupabase = { ...existingSupabaseData };
+
         for (const key in dataToMerge) {
-            if (Object.hasOwnProperty.call(dataToMerge, key) && dataToMerge[key] !== undefined) {
-                mergedDataForSupabase[key] = dataToMerge[key];
+            if (Object.hasOwnProperty.call(dataToMerge, key)) {
+                // Special handling for array properties: append unique new items
+                if (key === 'notes' && Array.isArray(dataToMerge.notes)) {
+                    // Create a Set of existing note IDs to prevent duplicates
+                    const existingNoteIds = new Set(mergedDataForSupabase.notes.map(note => note.id));
+                    dataToMerge.notes.forEach(newNote => {
+                        if (!existingNoteIds.has(newNote.id)) {
+                            mergedDataForSupabase.notes.push(newNote);
+                        }
+                    });
+                } else if (key === 'chatMessages' && Array.isArray(dataToMerge.chatMessages)) {
+                    // Assuming chat messages might not have unique IDs, simple concatenation
+                    mergedDataForSupabase.chatMessages.push(...dataToMerge.chatMessages);
+                } else if (key === 'archives' && Array.isArray(dataToMerge.archives)) {
+                     // Assuming archives might not have unique IDs, simple concatenation
+                    mergedDataForSupabase.archives.push(...dataToMerge.archives);
+                } else {
+                    // For other non-array properties, simply overwrite/add with the new value
+                    if (dataToMerge[key] !== undefined) {
+                        mergedDataForSupabase[key] = dataToMerge[key];
+                    }
+                }
             }
         }
+        // Also ensure any non-array properties from existingSupabaseData that might
+        // not be in dataToMerge are preserved. (The spread operator already did this initially)
 
+        // Step 3: Send the fully merged data back to Supabase using 'upsert'.
         const { data, error } = await supabase
           .from(BOARD_TABLE_NAME)
           .upsert({ id: GLOBAL_BOARD_ROW_ID, data: mergedDataForSupabase }, { onConflict: 'id' });
 
         if (error) throw error;
 
-        console.log('Supabase update/insert successful:', data);
+        console.log('Supabase update/insert successful. Saved data:', mergedDataForSupabase);
         showStatus('Board data saved to Supabase successfully.', 'success');
 
-        await fetchBoardDataFromSupabase();
+        // Step 4: After a successful save, refresh the client's display.
+        // This ensures the local UI reflects the exact state now stored in Supabase.
+        await fetchBoardDataFromSupabase(); // This will fetch the latest from DB and update UI
+        
+        // Optional: If the parent needs explicit confirmation or the latest data back:
+        // window.parent.postMessage({ type: 'BOARD_DATA_SAVED', boardData: boardData }, '*');
+
       } catch (error) {
         console.error('Error saving board data to Supabase:', error.message);
         showStatus(`Error saving board data: ${error.message}`, 'error');
@@ -187,13 +212,20 @@
 
     // --- Message Handling for Parent Frame Communication ---
     window.addEventListener('message', async event => {
+      // IMPORTANT: Validate event.origin in production to prevent Cross-Site Scripting (XSS) attacks.
+      // Example: if (event.origin !== "https://your-main-app-domain.netlify.app") { return; }
+
       try {
         const msg = event.data;
 
+        // Handles messages requesting to SAVE board data
         if (msg && msg.type === 'SAVE_BOARD' && msg.boardData) {
           console.log('Received SAVE_BOARD from parent, initiating save to Supabase...');
+          // The parent should send only the specific new items or updates needed to be merged
+          // e.g., { notes: [{ id: "new_note_id", content: "hello" }] }
           await sendBoardDataToSupabase(msg.boardData);
         }
+        // Handles messages requesting to GET board data
         else if (msg && msg.type === 'REQUEST_BOARD') {
           console.log('Received REQUEST_BOARD from parent, fetching from Supabase and sending back...');
           const currentSupabaseData = await fetchBoardDataFromSupabase();
@@ -216,6 +248,9 @@
       }, payload => {
         console.log('Realtime update received:', payload.new.data);
         if (payload.new.data) {
+          // Merge the new data received from the realtime update into the client's current 'boardData'.
+          // This keeps the local state synchronized with the latest changes from other clients.
+          // This merge logic is simpler for realtime as payload.new.data should be the full object from DB
           for (const key in payload.new.data) {
             if (Object.hasOwnProperty.call(payload.new.data, key) && payload.new.data[key] !== undefined) {
               boardData[key] = payload.new.data[key];
