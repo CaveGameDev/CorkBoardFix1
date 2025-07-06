@@ -825,35 +825,51 @@
       const [chatMessages, setChatMessages] = React.useState([]);
       const [archives, setArchives] = React.useState([]);
 
-      React.useEffect(() => {
-        // receive initial and subsequent DB updates
-        const handleMessage = (e) => {
-          const msg = e.data;
-          if (msg?.type === 'BOARD_DATA') {
-            const bd = msg.boardData || {};
-            setNotes(bd.notes || []);
-            setChatMessages(bd.chatMessages || []);
-            setArchives(bd.archives || []);
-          }
-        };
-        const handleStorage = (e) => {
-          if (e.key === 'boardData') {
-            const bd = JSON.parse(e.newValue||'{}');
-            setNotes(bd.notes||[]);
-            setChatMessages(bd.chatMessages||[]);
-            setArchives(bd.archives||[]);
-          }
-        };
-        window.addEventListener('message', handleMessage);
-        window.addEventListener('storage', handleStorage);
-        const frame = document.getElementById('db-frame');
-        if (frame) frame.contentWindow.postMessage({ type: 'REQUEST_BOARD' }, '*');
-        return () => {
-          window.removeEventListener('message', handleMessage);
-          window.removeEventListener('storage', handleStorage);
-        };
-      }, []);
+React.useEffect(() => {
+      const handleMessage = (e) => {
+        const msg = e.data;
+        if (msg?.type === 'BOARD_DATA') {
+          const bd = msg.boardData || {};
+          setNotes(bd.notes || []);
+          setChatMessages(bd.chatMessages || []);
+          setArchives(bd.archives || []);
+          // Add this console log to verify if data is received by the parent
+          console.log('Parent: Received BOARD_DATA. Notes count:', (bd.notes || []).length);
+          console.log('Parent: Received BOARD_DATA. Chat messages count:', (bd.chatMessages || []).length);
+        }
+      };
 
+      window.addEventListener('message', handleMessage);
+
+      const frame = document.getElementById('db-frame');
+      
+      // Function to request data from the iframe once it's loaded
+      const requestDataIfFrameLoaded = () => {
+          if (frame && frame.contentWindow) {
+              frame.contentWindow.postMessage({ type: 'REQUEST_BOARD' }, '*');
+              console.log('Parent: Sent REQUEST_BOARD to iframe after iframe loaded.');
+          }
+      };
+
+      if (frame) {
+          // Check if the iframe is already loaded (e.g., due to browser cache)
+          if (frame.contentWindow && frame.contentWindow.document.readyState === 'complete') {
+              requestDataIfFrameLoaded();
+          } else {
+              // Otherwise, wait for the iframe's load event
+              frame.onload = requestDataIfFrameLoaded;
+          }
+      }
+
+      return () => {
+        window.removeEventListener('message', handleMessage);
+        // Clean up the iframe's onload handler to prevent memory leaks
+        if (frame) {
+            frame.onload = null; 
+        }
+      };
+    }, []); // Empty dependency array means this runs once on mount
+      
       React.useEffect(() => {
         const frame = document.getElementById('db-frame');
         if (frame) {
