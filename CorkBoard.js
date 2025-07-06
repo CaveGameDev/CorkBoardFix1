@@ -1,5 +1,4 @@
 // CorkBoard.js
-import React from 'react';
 import html2canvas from 'https://html2canvas.hertzen.com/dist/html2canvas.min.js'; // Import directly from CDN
 import { 
     generateId, 
