@@ -1,17 +1,5 @@
 // CorkBoard.js
-import html2canvas from 'https://html2canvas.hertzen.com/dist/html2canvas.min.js'; // Import directly from CDN
-import { 
-    generateId, 
-    getClientCoords, 
-    getDistance, 
-    getMidpoint, 
-    waitForAllMediaToLoad, 
-    isSuspiciousLink, 
-    replaceEmojiCommands, 
-    renderTextWithLinks 
-} from './utils.js';
-import { audio, fluorescentBuzzAudio, toggleAudio, skipAudio, attemptPlayAudio, isMusicUserPaused } from './audio.js';
-import Chat from './Chat.js';
+// No imports, relying on global functions/React/ReactDOM/html2canvas
 
 // Constants for CorkBoard
 const ZOOM_SPEED = 0.1;
@@ -124,7 +112,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
 
   const handleSendChat = (text) => {
     const newMsg = {
-      id: generateId(),
+      id: generateId(), // Global function
       text,
       username,
       created_at: new Date().toISOString()
@@ -263,7 +251,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
     e.preventDefault(); 
     setSelectedNote(note); 
     setDraggingNoteId(note.id);
-    const { x, y } = getClientCoords(e);
+    const { x, y } = getClientCoords(e); // Global function
     setDragStartCoords({ x, y });
     setDraggedNoteInitialPos(note.position);
     setCurrentDragOffset({ x: 0, y: 0 }); 
@@ -290,15 +278,15 @@ function CorkBoard({ username }) { // username passed as prop from main.js
 
     if (e.touches && e.touches.length === 2) {
         setIsPinching(true);
-        const p1 = getClientCoords(e, 0);
-        const p2 = getClientCoords(e, 1);
-        setInitialPinchDistance(getDistance(p1, p2));
-        setInitialPinchMidpoint(getMidpoint(p1, p2));
+        const p1 = getClientCoords(e, 0); // Global function
+        const p2 = getClientCoords(e, 1); // Global function
+        setInitialPinchDistance(getDistance(p1, p2)); // Global function
+        setInitialPinchMidpoint(getMidpoint(p1, p2)); // Global function
         setInitialBoardStateForPinch({ offset: boardStateRef.current.offset, zoom: boardStateRef.current.zoom });
         setSelectedNote(null); 
     } else if (e.touches && e.touches.length === 1 || e.type === 'mousedown') {
         setIsBoardDragging(true);
-        const { x, y } = getClientCoords(e);
+        const { x, y } = getClientCoords(e); // Global function
         setBoardDragStartCoords({ x, y });
         setInitialBoardOffsetDuringDrag(boardStateRef.current.offset); 
         setSelectedNote(null); 
@@ -307,7 +295,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
 
   React.useEffect(() => {
     const handleBoardInteractionMove = (e) => {
-      const { x: clientX, y: clientY } = getClientCoords(e);
+      const { x: clientX, y: clientY } = getClientCoords(e); // Global function
 
       if (draggingNoteId && dragStartCoords && draggedNoteInitialPos) {
         e.preventDefault(); 
@@ -322,10 +310,10 @@ function CorkBoard({ username }) { // username passed as prop from main.js
       } else if (isPinching && initialPinchDistance > 0 && initialPinchMidpoint && initialBoardStateForPinch) {
         e.preventDefault(); 
         if (e.touches && e.touches.length === 2) {
-            const p1 = getClientCoords(e, 0);
-            const p2 = getClientCoords(e, 1);
-            const currentPinchDistance = getDistance(p1, p2);
-            const currentPinchMidpoint = getMidpoint(p1, p2);
+            const p1 = getClientCoords(e, 0); // Global function
+            const p2 = getClientCoords(e, 1); // Global function
+            const currentPinchDistance = getDistance(p1, p2); // Global function
+            const currentPinchMidpoint = getMidpoint(p1, p2); // Global function
 
             const zoomFactor = currentPinchDistance / initialPinchDistance;
             let newZoom = initialBoardStateForPinch.zoom * zoomFactor;
@@ -369,8 +357,6 @@ function CorkBoard({ username }) { // username passed as prop from main.js
         
         const noteToUpdate = notes.find(n => n.id === draggingNoteId);
         if (noteToUpdate) {
-            // NOTE: 'room' is a global variable from Base.html or external script.
-            // In a real app, you'd manage this dependency better (e.g., via Context API or prop drilling).
             if (typeof room !== 'undefined' && room.collection) {
                 await room.collection('note_v2').update(draggingNoteId, {
                     position: {
@@ -381,7 +367,6 @@ function CorkBoard({ username }) { // username passed as prop from main.js
                 });
             } else {
                 console.warn("Global 'room' object or 'collection' method not found. Note position not saved to DB.");
-                // Update local state even if DB update fails
                 setNotes(prev => prev.map(n =>
                     n.id === draggingNoteId ? { ...n, position: {x: finalX, y: finalY, rotation: noteToUpdate.position?.rotation || 0}} : n
                 ));
@@ -472,29 +457,29 @@ function CorkBoard({ username }) { // username passed as prop from main.js
     if (darknessOverlay) {
         let opacity = 0;
         if (zoom < ZOOM_THRESHOLD_FOR_DARKNESS) {
-            opacity = 1 - (zoom - MIN_ZOOM) / (ZOOM_THRESHOLD_FOR_DARKNESS - MIN_ZOOM);
+            opacity = 1 - (zoom - MIN_ZOOM) / (ZOOM_THRESHOLD_FOR_DARKNESS - MIN_ZOOML);
             opacity = Math.min(1, Math.max(0, opacity)); 
         }
         darknessOverlay.style.opacity = opacity;
     }
 
     if (zoom <= ZOOM_THRESHOLD_FOR_AUDIO_CHANGE) {
-      audio.pause();
-      if (fluorescentBuzzAudio.paused) {
+      audio.pause(); // Global variable
+      if (fluorescentBuzzAudio.paused) { // Global variable
         fluorescentBuzzAudio.play().catch(err => console.warn("Buzz audio play failed:", err));
       }
     } else {
-      fluorescentBuzzAudio.pause();
-      if (!isMusicUserPaused && audio.paused) { 
+      fluorescentBuzzAudio.pause(); // Global variable
+      if (!isMusicUserPaused && audio.paused) { // Global variable
         audio.play().catch(err => console.warn("Main audio resume failed:", err));
       }
     }
-  }, [zoom]); // Removed isMusicUserPaused, ZOOM_THRESHOLD_FOR_DARKNESS, ZOOM_THRESHOLD_FOR_AUDIO_CHANGE, MIN_ZOOM from deps as they are constants
+  }, [zoom]); 
 
   const processSelectedFile = async (file) => {
     if (!file) return;
 
-    attemptPlayAudio(); 
+    attemptPlayAudio(); // Global function
 
     const fileType = file.type;
 
@@ -544,7 +529,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
         return;
     }
 
-    attemptPlayAudio(); 
+    attemptPlayAudio(); // Global function
     
     if (newNoteText.startsWith(AI_IMAGE_COMMAND_PREFIX)) {
         const promptText = newNoteText.substring(AI_IMAGE_COMMAND_PREFIX.length).trim();
@@ -556,12 +541,12 @@ function CorkBoard({ username }) { // username passed as prop from main.js
         try {
           const aiImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptText)}`;
           const newNote = {
-            id: generateId(),
+            id: generateId(), // Global function
             text: `AI Generated: "${promptText}"`,
             mediaUrl: aiImageUrl,
             mediaType: 'image',
             position: { x: wx, y: wy, rotation: (Math.random()-0.5)*10 },
-            username: username // Add username to AI generated notes
+            username: username 
           };
           setNotes(prev => [...prev, newNote]);
         } catch (err) {
@@ -577,9 +562,9 @@ function CorkBoard({ username }) { // username passed as prop from main.js
     const AI_EMOJI_COMMAND_PATTERN = /!emoji\s+(.+)/g;
     let finalNoteText = newNoteText;
     if (AI_EMOJI_COMMAND_PATTERN.test(newNoteText)) { 
-        setIsGeneratingAIImage(true); // Re-using this flag for any AI operation
+        setIsGeneratingAIImage(true); 
         try {
-            finalNoteText = await replaceEmojiCommands(newNoteText); 
+            finalNoteText = await replaceEmojiCommands(newNoteText); // Global function
         } catch (error) {
             console.error("Error processing emoji commands for note:", error);
             alert("Failed to process emoji commands. Please try again.");
@@ -590,7 +575,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
         }
     }
 
-    if (isSuspiciousLink(finalNoteText)) {
+    if (isSuspiciousLink(finalNoteText)) { // Global function
         alert("Suspicious link detected! Links from tiny.cc or bit.ly are not allowed.");
         return;
     }
@@ -629,7 +614,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
     };
     
     const newNote = {
-      id: generateId(),
+      id: generateId(), // Global function
       text: finalNoteText,
       mediaUrl,
       mediaType,
@@ -638,7 +623,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
         y: wy + randomOffset.y,
         rotation: (Math.random()-0.5)*10
       },
-      username: username // Add username to notes
+      username: username 
     };
     setNotes(prev => [...prev, newNote]);
     
@@ -653,9 +638,9 @@ function CorkBoard({ username }) { // username passed as prop from main.js
         return;
     }
 
-    await waitForAllMediaToLoad(boardRef.current);
+    await waitForAllMediaToLoad(boardRef.current); // Global function
 
-    const canvas = await html2canvas(boardRef.current, { 
+    const canvas = await html2canvas(boardRef.current, { // Global html2canvas
         scale: 0.5, 
         useCORS: true 
     }); 
@@ -670,9 +655,9 @@ function CorkBoard({ username }) { // username passed as prop from main.js
     link.click();
     document.body.removeChild(link);
     
-    const dataUrl = canvas.toDataURL('image/png');
+    const dataUrl = canvas.toToDataURL('image/png');
     const newArchive = {
-      id: generateId(),
+      id: generateId(), // Global function
       imageUrl: dataUrl,
       timestamp: date.toISOString()
     };
@@ -682,10 +667,10 @@ function CorkBoard({ username }) { // username passed as prop from main.js
   const handleCommand = (command) => {
     switch (command) {
       case 'toggleMusic': 
-        toggleAudio();
+        toggleAudio(); // Global function
         break;
       case 'skipMusic': 
-        skipAudio();
+        skipAudio(); // Global function
         break;
       case 'archive':
         handleArchive();
@@ -728,7 +713,7 @@ function CorkBoard({ username }) { // username passed as prop from main.js
   return (
     <>
       <div id="darkness-overlay" ref={darknessOverlayRef}></div> 
-      <Chat
+      <Chat // Global Chat component
         chatMessages={chatMessages}
         onSendChat={handleSendChat}
         onCommand={handleCommand}
@@ -927,5 +912,3 @@ function CorkBoard({ username }) { // username passed as prop from main.js
     </>
   );
 }
-
-export default CorkBoard;
