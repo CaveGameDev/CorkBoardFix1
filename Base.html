@@ -45,12 +45,29 @@
     .status-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     .status-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
     .status-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+    /* Style for the new button */
+    .action-button {
+      background-color: #f44336; /* Red background */
+      color: white; /* White text */
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1em;
+      margin-top: 20px;
+      transition: background-color 0.3s ease;
+    }
+    .action-button:hover {
+      background-color: #d32f2f; /* Darker red on hover */
+    }
   </style>
 </head>
 <body>
   <h2>Stored Board Data (Supabase Backend)</h2>
   <div id="status-messages"></div>
   <pre id="board-data">Loading…</pre>
+
+  <button id="clear-data-button" class="action-button">Clear All Board Data</button>
 
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
@@ -62,6 +79,7 @@
 
     const BOARD_TABLE_NAME = 'board_data';
     const GLOBAL_BOARD_ROW_ID = 1;
+    const ADMIN_PASSWORD = 'hiwhyguy3911'; // The password to clear data
 
     let boardData = {
       notes: [],
@@ -174,97 +192,5 @@
                     // Assuming chat messages might not have unique IDs, simple concatenation
                     mergedDataForSupabase.chatMessages.push(...dataToMerge.chatMessages);
                 } else if (key === 'archives' && Array.isArray(dataToMerge.archives)) {
-                     // Assuming archives might not have unique IDs, simple concatenation
-                    mergedDataForSupabase.archives.push(...dataToMerge.archives);
-                } else {
-                    // For other non-array properties, simply overwrite/add with the new value
-                    if (dataToMerge[key] !== undefined) {
-                        mergedDataForSupabase[key] = dataToMerge[key];
-                    }
-                }
-            }
-        }
-        // Also ensure any non-array properties from existingSupabaseData that might
-        // not be in dataToMerge are preserved. (The spread operator already did this initially)
-
-        // Step 3: Send the fully merged data back to Supabase using 'upsert'.
-        const { data, error } = await supabase
-          .from(BOARD_TABLE_NAME)
-          .upsert({ id: GLOBAL_BOARD_ROW_ID, data: mergedDataForSupabase }, { onConflict: 'id' });
-
-        if (error) throw error;
-
-        console.log('Supabase update/insert successful. Saved data:', mergedDataForSupabase);
-        showStatus('Board data saved to Supabase successfully.', 'success');
-
-        // Step 4: After a successful save, refresh the client's display.
-        // This ensures the local UI reflects the exact state now stored in Supabase.
-        await fetchBoardDataFromSupabase(); // This will fetch the latest from DB and update UI
-        
-        // Optional: If the parent needs explicit confirmation or the latest data back:
-        // window.parent.postMessage({ type: 'BOARD_DATA_SAVED', boardData: boardData }, '*');
-
-      } catch (error) {
-        console.error('Error saving board data to Supabase:', error.message);
-        showStatus(`Error saving board data: ${error.message}`, 'error');
-      }
-    }
-
-    // --- Message Handling for Parent Frame Communication ---
-    window.addEventListener('message', async event => {
-      // IMPORTANT: Validate event.origin in production to prevent Cross-Site Scripting (XSS) attacks.
-      // Example: if (event.origin !== "https://your-main-app-domain.netlify.app") { return; }
-
-      try {
-        const msg = event.data;
-
-        // Handles messages requesting to SAVE board data
-        if (msg && msg.type === 'SAVE_BOARD' && msg.boardData) {
-          console.log('Received SAVE_BOARD from parent, initiating save to Supabase...');
-          // The parent should send only the specific new items or updates needed to be merged
-          // e.g., { notes: [{ id: "new_note_id", content: "hello" }] }
-          await sendBoardDataToSupabase(msg.boardData);
-        }
-        // Handles messages requesting to GET board data
-        else if (msg && msg.type === 'REQUEST_BOARD') {
-          console.log('Received REQUEST_BOARD from parent, fetching from Supabase and sending back...');
-          const currentSupabaseData = await fetchBoardDataFromSupabase();
-          event.source.postMessage({ type: 'BOARD_DATA', boardData: currentSupabaseData }, event.origin);
-        }
-      } catch (e) {
-        console.warn('DB frame error processing message:', e);
-        showStatus(`Internal DB frame communication error: ${e.message}`, 'error');
-      }
-    });
-
-    // --- Realtime Subscription for Automatic Updates from Other Clients ---
-    supabase
-      .channel('public:board_data')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: BOARD_TABLE_NAME,
-        filter: `id=eq.${GLOBAL_BOARD_ROW_ID}`
-      }, payload => {
-        console.log('Realtime update received:', payload.new.data);
-        if (payload.new.data) {
-          // Merge the new data received from the realtime update into the client's current 'boardData'.
-          // This keeps the local state synchronized with the latest changes from other clients.
-          // This merge logic is simpler for realtime as payload.new.data should be the full object from DB
-          for (const key in payload.new.data) {
-            if (Object.hasOwnProperty.call(payload.new.data, key) && payload.new.data[key] !== undefined) {
-              boardData[key] = payload.new.data[key];
-            }
-          }
-          displayBoardData();
-          showStatus('Realtime update received and applied.', 'info');
-        }
-      })
-      .subscribe();
-    console.log('Supabase Realtime subscription activated for ' + BOARD_TABLE_NAME + ' (id=' + GLOBAL_BOARD_ROW_ID + ').');
-
-    // --- Initial Load ---
-    window.addEventListener('load', fetchBoardDataFromSupabase);
-  </script>
-</body>
-</html>
+                    // Assuming archives might not have unique IDs, simple concatenation
+                    mergedDataForSupabase.
