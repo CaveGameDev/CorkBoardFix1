@@ -25,7 +25,7 @@
     .status-info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
     .status-warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
 </head>
 <body>
   <h2>Stored Board Data (Supabase Backend)</h2>
@@ -36,9 +36,10 @@
     // --- SUPABASE CONFIGURATION ---
     // These values are directly from your Supabase project
     const SUPABASE_URL = 'https://gtmpsjiuqyqjonlzjuhz.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_secret_pLEpe2VqKIkWlJDRXsZUvg_aE7Ctpi1';
+    const SUPABASE_ANON_KEY = 'sb_publishable_lBme1W769_h523sdzlpGuw_Aqm4qcdv';
 
     // Initialize the Supabase client
+    // This part will now correctly execute AFTER the Supabase SDK is loaded, thanks to 'defer'
     const supabase = Supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // Database table and row configuration
